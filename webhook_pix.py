@@ -21,47 +21,54 @@ def salvar_notificacao(payload):
     return filepath
 
 def processar_notificacao_pix(payload):
-    """Processa a notificação de pagamento Pix recebida."""
+    """Processa a notificação de pagamento Pix recebida (OpenPix + Woovi)."""
     try:
-        if 'pix' in payload:
-            pix_data = payload['pix']
-            pix_info = {
-                'status': pix_data.get('status', 'UNKNOWN'),
-                'valor': pix_data.get('valor', 0),
-                'txid': pix_data.get('txid', ''),
-                'e2eid': pix_data.get('e2eid', ''),
-                'horario': pix_data.get('horario', datetime.now().isoformat()),
-                'infoPagador': pix_data.get('infoPagador', {}),
-                'chave': pix_data.get('chave', ''),
-                'notification_id': str(uuid.uuid4()),
-                'event': payload.get('event', 'UNKNOWN')
-            }
-            if 'charge' in payload:
-                charge_data = payload['charge']
-                pix_info['charge'] = {
-                    'correlationID': charge_data.get('correlationID', ''),
-                    'value': charge_data.get('value', 0),
-                    'comment': charge_data.get('comment', '')
-                }
-            if pix_info['status'] in ['CONCLUIDA', 'COMPLETED']:
-                print(f"Pagamento Pix recebido: {pix_info['valor']} - ID: {pix_info['txid']}")
-                print(f"Pagador: {pix_info['infoPagador'].get('nome', 'N/A')}")
-                print(f"Chave Pix: {pix_info['chave']}")
+        pix_info = {
+            'event': payload.get('event', payload.get('evento', 'UNKNOWN')),
+            'notification_id': str(uuid.uuid4()),
+            'raw_payload': payload
+        }
+
+        # Caso 1: padrão original OpenPix
+        if 'pix' in payload and isinstance(payload['pix'], dict):
+            pix = payload['pix']
+            pix_info.update({
+                'status': pix.get('status'),
+                'valor': pix.get('valor'),
+                'txid': pix.get('txid'),
+                'e2eid': pix.get('e2eid'),
+                'infoPagador': pix.get('infoPagador', {}),
+                'type': pix.get('type', payload.get('type'))
+            })
+
+        # Caso 2: payload do Woovi sandbox
+        elif payload.get('event') == 'OPENPIX:TRANSACTION_RECEIVED' or payload.get('evento') == 'teste_webhook':
+            charge = payload.get('charge', {})
+            pm_pix = charge.get('paymentMethods', {}).get('pix', charge.get('customer', {}))
+            pix_info.update({
+                'status': charge.get('status') or pm_pix.get('status'),
+                'valor': charge.get('value') or pm_pix.get('value'),
+                'txid': charge.get('transactionID') or pm_pix.get('transactionID'),
+                'e2eid': charge.get('identifier') or pm_pix.get('identifier'),
+                'infoPagador': charge.get('customer') or pm_pix.get('payer', {}),
+                'type': charge.get('type')
+            })
+
         else:
-            pix_info = {
-                'status': payload.get('status', 'UNKNOWN'),
-                'valor': payload.get('valor', 0),
-                'txid': payload.get('txid', ''),
-                'e2eid': payload.get('e2eid', ''),
-                'horario': payload.get('horario', datetime.now().isoformat()),
-                'infoPagador': payload.get('infoPagador', {}),
-                'chave': payload.get('chave', ''),
-                'notification_id': str(uuid.uuid4()),
+            return {
+                'status': 'ERROR',
+                'error': 'Formato de payload desconhecido',
                 'raw_payload': payload
             }
+
+        if pix_info['status'] in ['COMPLETED', 'CONCLUIDA']:
+            print(f"📥 Pagamento confirmado: R${pix_info['valor']} | TXID: {pix_info['txid']}")
+            print(f"👤 Pagador: {pix_info['infoPagador'].get('name') or pix_info['infoPagador'].get('nome')}")
+
         return pix_info
+
     except Exception as e:
-        print(f"Erro ao processar notificação: {str(e)}")
+        print(f"Erro ao processar notificação: {e}")
         return {
             'status': 'ERROR',
             'error': str(e),
