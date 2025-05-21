@@ -1,0 +1,33 @@
+{
+    "event": "OPENPIX:PIX_RECEIVED",
+    "pix": {
+        "status": "COMPLETED",
+        "valor": 100.5,
+        "txid": "e12ca412-872b-43d4-aace-9db1fe394aa7",
+        "e2eid": "Ee3d6c916d8e344af93ae50e96a842779",
+        "horario": "2025-05-21T10:41:18.818571",
+        "infoPagador": {
+            "nome": "Jo\u00e3o da Silva",
+            "cpf": "12345678900",
+            "chave": "joao@exemplo.com"
+        },
+        "chave": "loja@criptofacil.com.br",
+        "infoAdicionais": {
+            "descricao": "Pagamento de teste"
+        }
+    },
+    "charge": {
+        "status": "COMPLETED",
+        "correlationID": "TESTE-6d7800a4",
+        "createdAt": "2025-05-21T10:41:18.818571",
+        "updatedAt": "2025-05-21T10:41:18.818571",
+        "value": 10050,
+        "comment": "Pagamento de teste via webhook",
+        "expiresIn": 3600,
+        "type": "DYNAMIC"
+    },
+    "account": {
+        "clientId": "cliente-teste-123",
+        "name": "Loja Teste"
+    }
+}

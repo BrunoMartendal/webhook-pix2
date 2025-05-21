@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: webhook-pix
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python webhook_pix.py
+    envVars:
+      - key: PORT
+        value: 10000
