@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Pix Gerado</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 20px;
+            padding-bottom: 40px;
+        }
+        .qrcode-container {
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: center;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .qrcode-img {
+            max-width: 250px;
+            margin: 20px auto;
+        }
+        .btn-primary {
+            background-color: #33cc95;
+            border-color: #33cc95;
+        }
+        .btn-primary:hover {
+            background-color: #2ba97d;
+            border-color: #2ba97d;
+        }
+        .payload-box {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 20px 0;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        .transaction-info {
+            background-color: #e8f8f2;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .price {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #33cc95;
+        }
+        .crypto-badge {
+            display: inline-block;
+            background-color: #f8f9fa;
+            border-radius: 20px;
+            padding: 5px 15px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .timer {
+            font-size: 1.2rem;
+            color: #dc3545;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="header">
+                    <h1>Pagamento Pix</h1>
+                    <p class="lead">Escaneie o QR Code para pagar</p>
+                </div>
+                
+                <div class="qrcode-container">
+                    <div class="transaction-info">
+                        <div class="price">
+                            R$ {{ valor }} <span class="crypto-badge">{{ moeda }}</span>
+                        </div>
+                        <div class="timer" id="countdown">15:00</div>
+                    </div>
+                    
+                    <div class="qrcode-img">
+                        <img src="{{ url_for('static', filename=qrcode_url) }}" alt="QR Code Pix" class="img-fluid">
+                    </div>
+                    
+                    <h5>Código Pix Copia e Cola</h5>
+                    <div class="payload-box">
+                        {{ payload }}
+                    </div>
+                    
+                    <button class="btn btn-primary" onclick="copiarPayload()">Copiar Código Pix</button>
+                    
+                    <div class="mt-4">
+                        <p class="text-muted">ID da transação: {{ transaction_id }}</p>
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary">Novo Pagamento</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function copiarPayload() {
+            const payload = document.querySelector('.payload-box').innerText;
+            navigator.clipboard.writeText(payload).then(() => {
+                alert('Código Pix copiado para a área de transferência!');
+            }).catch(err => {
+                console.error('Erro ao copiar: ', err);
+            });
+        }
+        
+        // Contador regressivo de 15 minutos
+        function startCountdown() {
+            let minutes = 15;
+            let seconds = 0;
+            
+            const countdownElement = document.getElementById('countdown');
+            
+            const interval = setInterval(() => {
+                if (seconds === 0) {
+                    if (minutes === 0) {
+                        clearInterval(interval);
+                        countdownElement.textContent = "Expirado";
+                        return;
+                    }
+                    minutes--;
+                    seconds = 59;
+                } else {
+                    seconds--;
+                }
+                
+                const minutesStr = minutes.toString().padStart(2, '0');
+                const secondsStr = seconds.toString().padStart(2, '0');
+                countdownElement.textContent = `${minutesStr}:${secondsStr}`;
+            }, 1000);
+        }
+        
+        // Inicia o contador quando a página carrega
+        window.onload = startCountdown;
+    </script>
+</body>
+</html>
