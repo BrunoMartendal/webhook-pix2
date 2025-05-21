@@ -39,11 +39,27 @@ def listar_chaves():
 @app.route('/adicionar', methods=['GET', 'POST'])
 def adicionar_chave_pix_route():
     if request.method == 'POST':
-        nova_chave = request.form.get('chave')
-        if nova_chave:
-            chaves_pix.append(nova_chave)
-            flash('Chave adicionada com sucesso!')
-        return redirect(url_for('listar_chaves'))
+        descricao = request.form.get('descricao')
+        tipo_chave = request.form.get('tipo_chave')
+        chave = request.form.get('chave')
+
+        if not descricao or not tipo_chave or not chave:
+            flash('Todos os campos são obrigatórios!')
+            return redirect(url_for('adicionar_chave_pix_route'))
+
+        # Aqui você pode salvar num banco de dados ou lista
+        nova_entrada = {
+            'descricao': descricao,
+            'tipo_chave': tipo_chave,
+            'chave': chave
+        }
+
+        # exemplo: adicionando em uma lista global
+        chaves_pix.append(nova_entrada)
+
+        flash('Chave adicionada com sucesso!')
+        return redirect(url_for('listar_chaves_pix'))
+
     return render_template('adicionar_chave_pix.html')
 
 @app.route('/remover/<chave>')
