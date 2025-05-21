@@ -1,1 +1,1 @@
-web: gunicorn webhook_pix:app
+web: gunicorn app:app
