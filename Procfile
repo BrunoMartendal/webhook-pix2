@@ -1,1 +1,1 @@
-web: python webhook_pix.py
+web: gunicorn webhook_pix:app
