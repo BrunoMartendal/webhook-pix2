@@ -12,7 +12,19 @@ LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
 os.makedirs(LOGS_DIR, exist_ok=True)
 
 # Lista de chaves Pix (simulado - depois pode ir para banco de dados)
-chaves_pix = ['exemplo@pix.com', 'outra@chave.com']
+chaves_pix = [
+    {
+        'descricao': 'Principal',
+        'tipo_chave': 'E-mail',
+        'chave': 'exemplo@pix.com'
+    },
+    {
+        'descricao': 'Conta PJ',
+        'tipo_chave': 'Telefone',
+        'chave': '+55 47 99622-9999'
+    }
+]
+
 
 # -------------------- ROTAS DE FRONT-END --------------------
 
