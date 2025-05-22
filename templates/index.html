@@ -79,7 +79,7 @@
                     <h1>Pagamento Pix</h1>
                     <p class="lead">Pague com Pix e receba em criptomoeda</p>
                 </div>
-                
+
                 {% with messages = get_flashed_messages() %}
                     {% if messages %}
                         {% for message in messages %}
@@ -90,14 +90,14 @@
                         {% endfor %}
                     {% endif %}
                 {% endwith %}
-                
+
                 <div class="form-container">
                     <form action="{{ url_for('gerar_qrcode') }}" method="post">
                         <div class="mb-4">
                             <label for="valor" class="form-label fw-bold">Valor em R$</label>
                             <input type="text" class="form-control form-control-lg" id="valor" name="valor" placeholder="0,00" required>
                         </div>
-                        
+
                         <div class="mb-4">
                             <label class="form-label fw-bold">Receber em</label>
                             <div class="crypto-options">
@@ -117,7 +117,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="mb-4">
                             <label for="chave_pix_id" class="form-label fw-bold">Chave Pix para recebimento</label>
                             <select class="form-select form-select-lg" id="chave_pix_id" name="chave_pix_id" required>
@@ -127,12 +127,12 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        
+
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-primary btn-lg">Gerar QR Code</button>
                         </div>
                     </form>
-                    
+
                     <div class="admin-link">
                         <a href="{{ url_for('listar_chaves') }}" class="btn btn-outline-secondary mt-3">
                             <i class="bi bi-gear"></i> Gerenciar Chaves Pix
@@ -142,7 +142,7 @@
             </div>
         </div>
     </div>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
