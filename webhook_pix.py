@@ -135,6 +135,33 @@ def processar_notificacao_pix(payload):
     except Exception as e:
         return {'status': 'ERROR', 'error': str(e)}
 
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@app.route('/debug/chaves')
+def debug_chaves():
+    try:
+        with open('/tmp/chaves_pix.json', 'r', encoding='utf-8') as f:
+            content = f.read()
+        logger.info(f"Conteúdo de /tmp/chaves_pix.json: {content}")
+        return f"Conteúdo de /tmp/chaves_pix.json:<pre>{content}</pre>"
+    except Exception as e:
+        logger.error(f"Erro ao ler /tmp/chaves_pix.json: {str(e)}")
+        return f"Erro ao ler /tmp/chaves_pix.json: {str(e)}"
+
+@app.route('/test_write')
+def test_write():
+    test_file = '/tmp/test_write.txt'
+    try:
+        with open(test_file, 'w') as f:
+            f.write('Teste de escrita bem-sucedido')
+        logger.info(f"Arquivo escrito em {test_file}")
+        return f"Arquivo escrito em {test_file}"
+    except Exception as e:
+        logger.error(f"Erro ao escrever em {test_file}: {str(e)}")
+        return f"Erro ao escrever em {test_file}: {str(e)}"
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
