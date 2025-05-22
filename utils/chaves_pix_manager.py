@@ -4,7 +4,14 @@ import uuid
 from datetime import datetime
 
 # Diretório para armazenar o arquivo de chaves Pix
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
+# No Render, é melhor usar um diretório temporário que tenha permissões de escrita garantidas
+if 'RENDER' in os.environ:
+    # No Render, use o diretório /tmp que tem permissões de escrita
+    DATA_DIR = '/tmp'
+else:
+    # Em ambiente local, use o diretório data na raiz do projeto
+    DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
+
 CHAVES_FILE = os.path.join(DATA_DIR, 'chaves_pix.json')
 
 # Garantir que o diretório de dados exista
@@ -16,7 +23,7 @@ def carregar_chaves_pix():
         try:
             with open(CHAVES_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError) as e:
+        except (json.JSONDecodeError, FileNotFoundError, PermissionError) as e:
             print(f"Erro ao carregar chaves Pix: {e}")
             return criar_chaves_padrao()
     else:
@@ -25,12 +32,24 @@ def carregar_chaves_pix():
 def salvar_chaves_pix(chaves):
     """Salva as chaves Pix no arquivo JSON."""
     try:
+        # Garantir que o diretório exista antes de tentar escrever
+        os.makedirs(os.path.dirname(CHAVES_FILE), exist_ok=True)
+        
         with open(CHAVES_FILE, 'w', encoding='utf-8') as f:
             json.dump(chaves, f, indent=4, ensure_ascii=False)
         return True
     except Exception as e:
         print(f"Erro ao salvar chaves Pix: {e}")
-        return False
+        # Em caso de erro, tente salvar em um local alternativo
+        try:
+            fallback_file = os.path.join('/tmp', 'chaves_pix_fallback.json')
+            with open(fallback_file, 'w', encoding='utf-8') as f:
+                json.dump(chaves, f, indent=4, ensure_ascii=False)
+            print(f"Chaves salvas no arquivo alternativo: {fallback_file}")
+            return True
+        except Exception as fallback_error:
+            print(f"Erro ao salvar no local alternativo: {fallback_error}")
+            return False
 
 def criar_chaves_padrao():
     """Cria chaves Pix padrão para novos usuários."""
