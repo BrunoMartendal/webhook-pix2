@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = 'segredo_simples'  # Necessário para usar flash()
 
-# Configuração da OpenPix
+# Configuração da OpenPix (sandbox para testes)
 OPENPIX_API_KEY = os.getenv('OPENPIX_API_KEY')
-OPENPIX_API_URL = 'https://api.openpix.com.br/openpix/v1'
+OPENPIX_API_URL = 'https://api.sandbox.openpix.com.br/openpix/v1'  # URL do sandbox
 OPENPIX_HEADERS = {
     'Authorization': f'Bearer {OPENPIX_API_KEY}',
     'Content-Type': 'application/json'
@@ -67,6 +67,7 @@ def gerar_qrcode():
             },
             'comment': f"Pagamento de R${valor_float:.2f} para {chave_pix['descricao']}"
         }
+        logger.info(f"Payload enviado para OpenPix: {json.dumps(payload, indent=4)}")
         response = requests.post(f'{OPENPIX_API_URL}/charge', headers=OPENPIX_HEADERS, json=payload)
         response.raise_for_status()
         charge = response.json()
@@ -184,7 +185,7 @@ def test_write_route():
         logger.info(f"Arquivo escrito em {test_file}")
         return f"Arquivo escrito em {test_file}"
     except Exception as e:
-        logger.error(f"Erro ao escrever em {test_file}: {str(e)}")
+        logger.error(f"Erro ao escrever em {test_file): {str(e)}")
         return f"Erro ao escrever em {test_file}: {str(e)}"
 
 # FUNÇÕES AUXILIARES
@@ -246,7 +247,7 @@ def processar_notificacao_pix(payload):
             return {'status': 'ERROR', 'error': 'Formato de payload desconhecido'}
 
         if pix_info['status'] in ['COMPLETED', 'CONCLUIDA']:
-            logger.info(f"📥 Pagamento confirmado: R${pix_info['valor']:.2f} | TxID: {pix_info['txid']}")
+            logger.info(f"📥 Pagamento confirmado: R${pix_info['valor']:.2f} | TXID: {pix_info['txid']}")
             logger.info(f"👤 Pagador: {pix_info['infoPagador'].get('name') or pix_info['infoPagador'].get('nome')}")
 
         return pix_info
