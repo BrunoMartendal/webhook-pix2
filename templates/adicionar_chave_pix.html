@@ -64,7 +64,7 @@
                         </div>
                         
                         <div class="mb-3">
-                            <label for="tipo_chave" class="form-label">Tipo de Chave</label>
+                            <label for="tipo_chave"' class="form-label">Tipo de Chave</label>
                             <select class="form-select" id="tipo_chave" name="tipo_chave" required>
                                 <option value="" selected disabled>Selecione o tipo de chave</option>
                                 <option value="CPF/CNPJ">CPF/CNPJ</option>
@@ -80,7 +80,7 @@
                         </div>
                         
                         <div class="d-flex justify-content-between">
-                            <a href="{{ url_for('listar_chaves_pix') }}" class="btn btn-secondary">Cancelar</a>
+                            <a href="{{ url_for('listar_chaves') }}" class="btn btn-secondary">Cancelar</a>
                             <button type="submit" class="btn btn-primary">Salvar Chave</button>
                         </div>
                     </form>
