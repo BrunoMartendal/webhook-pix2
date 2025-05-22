@@ -7,7 +7,6 @@ import logging
 import requests
 from utils.chaves_pix_manager import carregar_chaves_pix, adicionar_chave_pix, remover_chave_pix, salvar_transacao_pix, atualizar_transacao_pix
 from dotenv import load_dotenv
-import ssl
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -27,10 +26,9 @@ OPENPIX_HEADERS = {
     'Content-Type': 'application/json'
 }
 
-# Configurar sessão com TLS 1.3
+# Configurar sessão sem forçar versão SSL específica
 session = requests.Session()
 session.mount('https://', requests.adapters.HTTPAdapter(max_retries=3))
-session.ssl_version = ssl.PROTOCOL_TLSv1_3  # Forçar TLS 1.3
 
 # Logs de notificações Pix
 LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
