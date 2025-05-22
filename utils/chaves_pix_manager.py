@@ -17,6 +17,7 @@ CHAVES_FILE = os.path.join(DATA_DIR, 'chaves_pix.json')
 
 # Garante que o diretório de dados exista
 os.makedirs(DATA_DIR, exist_ok=True)
+logger.info(f"Diretório de dados configurado: {DATA_DIR}")
 
 def carregar_chaves_pix():
     """Carrega as chaves Pix do arquivo JSON ou cria padrão se não existir."""
