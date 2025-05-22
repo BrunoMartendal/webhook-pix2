@@ -7,3 +7,5 @@ logs/
 
 # Variáveis de ambiente
 .env
+
+.env *.pyc pycache/ *.log
