@@ -5,11 +5,11 @@ import uuid
 from datetime import datetime
 
 # Importa as funções de utilitário
-from utils.gerenciador_chaves import (
-    carregar_chaves_pix,
-    adicionar_chave_pix,
-    remover_chave_pix,
-    salvar_chaves_pix
+from utils.chaves_pix_manager import (
+carregar_chaves_pix,
+adicionar_chave_pix,
+remover_chave_pix,
+salvar_chaves_pix
 )
 
 app = Flask(__name__)
