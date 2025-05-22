@@ -24,6 +24,7 @@ os.makedirs(LOGS_DIR, exist_ok=True)
 @app.route('/')
 def index():
     chaves_pix = carregar_chaves_pix()
+    print(f"Chaves Pix carregadas para a página inicial: {json.dumps(chaves_pix, indent=4)}")
     return render_template('index.html', chaves_pix=chaves_pix)
 
 @app.route('/gerar_qrcode', methods=['POST'])
@@ -47,6 +48,7 @@ def gerar_qrcode():
 @app.route('/chaves')
 def listar_chaves():
     chaves_pix = carregar_chaves_pix()
+    print(f"Listando chaves Pix: {json.dumps(chaves_pix, indent=4)}")
     return render_template('chaves_pix.html', chaves_pix=chaves_pix)
 
 @app.route('/adicionar', methods=['GET', 'POST'])
@@ -55,15 +57,16 @@ def adicionar_chave_pix_route():
         descricao = request.form.get('descricao')
         tipo_chave = request.form.get('tipo_chave')
         chave = request.form.get('chave')
-
+        print(f"Dados do formulário: descricao={descricao}, tipo_chave={tipo_chave}, chave={chave}")
         if not descricao or not tipo_chave or not chave:
             flash('Todos os campos são obrigatórios!')
             return redirect(url_for('adicionar_chave_pix_route'))
-
-        adicionar_chave_pix(descricao, tipo_chave, chave)
-        flash('Chave adicionada com sucesso!')
+        try:
+            adicionar_chave_pix(descricao, tipo_chave, chave)
+            flash('Chave adicionada com sucesso!')
+        except Exception as e:
+            flash(f'Erro ao adicionar chave: {str(e)}')
         return redirect(url_for('listar_chaves'))
-
     return render_template('adicionar_chave_pix.html')
 
 @app.route('/remover/<chave_id>', methods=['POST'])
@@ -74,6 +77,17 @@ def remover_chave(chave_id):
     else:
         flash('Chave não encontrada.')
     return redirect(url_for('listar_chaves'))
+
+# -------------------- ROTA DE DEPURAÇÃO TEMPORÁRIA --------------------
+
+@app.route('/debug/chaves')
+def debug_chaves():
+    try:
+        with open('/tmp/chaves_pix.json', 'r', encoding='utf-8') as f:
+            content = f.read()
+        return f"Conteúdo de /tmp/chaves_pix.json:<pre>{content}</pre>"
+    except Exception as e:
+        return f"Erro ao ler /tmp/chaves_pix.json: {str(e)}"
 
 # -------------------- WEBHOOK PIX --------------------
 
