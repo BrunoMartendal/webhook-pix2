@@ -185,7 +185,7 @@ def test_write_route():
         logger.info(f"Arquivo escrito em {test_file}")
         return f"Arquivo escrito em {test_file}"
     except Exception as e:
-        logger.error(f"Erro ao escrever em {test_file): {str(e)}")
+        logger.error(f"Erro ao escrever em {test_file}: {str(e)}")
         return f"Erro ao escrever em {test_file}: {str(e)}"
 
 # FUNÇÕES AUXILIARES
