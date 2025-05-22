@@ -14,6 +14,7 @@ else:
     DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
 
 CHAVES_FILE = os.path.join(DATA_DIR, 'chaves_pix.json')
+TRANSACOES_FILE = os.path.join(DATA_DIR, 'transacoes_pix.json')
 
 # Garante que o diretório de dados exista
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -94,3 +95,58 @@ def remover_chave_pix(chave_id):
             return False
     logger.warning(f"Chave com ID {chave_id} não encontrada")
     return False
+
+def salvar_transacao_pix(valor, moeda, chave_id, txid, status='PENDENTE'):
+    """Salva uma transação Pix no arquivo JSON."""
+    logger.info(f"Salvando transação: valor={valor}, moeda={moeda}, chave_id={chave_id}, txid={txid}, status={status}")
+    transacoes = carregar_transacoes_pix()
+    nova_transacao = {
+        'id': str(uuid.uuid4()),
+        'valor': valor,
+        'moeda': moeda,
+        'chave_id': chave_id,
+        'txid': txid,
+        'status': status,
+        'data_criacao': datetime.now().strftime('%d/%m/%Y %H:%M')
+    }
+    transacoes.append(nova_transacao)
+    try:
+        with open(TRANSACOES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(transacoes, f, indent=4, ensure_ascii=False)
+        logger.info(f"Transação salva com sucesso em {TRANSACOES_FILE}")
+        return nova_transacao
+    except Exception as e:
+        logger.error(f"Erro ao salvar transação: {str(e)}")
+        return None
+
+def carregar_transacoes_pix():
+    """Carrega as transações Pix do arquivo JSON."""
+    logger.info(f"Tentando carregar transações de {TRANSACOES_FILE}")
+    if os.path.exists(TRANSACOES_FILE):
+        try:
+            with open(TRANSACOES_FILE, 'r', encoding='utf-8') as f:
+                transacoes = json.load(f)
+                logger.info(f"Transações carregadas: {json.dumps(transacoes, indent=4)}")
+                return transacoes
+        except Exception as e:
+            logger.error(f"Erro ao carregar transações: {str(e)}")
+            return []
+    return []
+
+def atualizar_transacao_pix(txid, status):
+    """Atualiza o status de uma transação Pix pelo txid."""
+    logger.info(f"Atualizando transação com txid: {txid}, novo status: {status}")
+    transacoes = carregar_transacoes_pix()
+    for transacao in transacoes:
+        if transacao['txid'] == txid:
+            transacao['status'] = status
+            try:
+                with open(TRANSACOES_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(transacoes, f, indent=4, ensure_ascii=False)
+                logger.info(f"Transação atualizada com sucesso: {txid}")
+                return transacao
+            except Exception as e:
+                logger.error(f"Erro ao atualizar transação: {str(e)}")
+                return None
+    logger.warning(f"Transação com txid {txid} não encontrada")
+    return None
