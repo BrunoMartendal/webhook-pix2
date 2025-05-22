@@ -1,8 +1,14 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 import os
 import json
 import uuid
 from datetime import datetime
+import logging
+from utils.chaves_pix_manager import carregar_chaves_pix, adicionar_chave_pix, remover_chave_pix
+
+# Configuração de logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = 'segredo_simples'  # Necessário para usar flash()
@@ -11,45 +17,62 @@ app.secret_key = 'segredo_simples'  # Necessário para usar flash()
 LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
 os.makedirs(LOGS_DIR, exist_ok=True)
 
-# Chaves Pix (simulação)
-chaves_pix = ['minhachave@email.com', 'outrachave@dominio.com']
-
 # ROTAS DO FRONT-END
 @app.route('/')
 def index():
+    chaves_pix = carregar_chaves_pix()
+    logger.info(f"Chaves Pix carregadas para a página inicial: {json.dumps(chaves_pix, indent=4)}")
     return render_template('index.html', chaves=chaves_pix)
 
 @app.route('/gerar_qrcode', methods=['POST'])
 def gerar_qrcode():
     valor = request.form.get('valor')
-    chave = request.form.get('chave')
+    chave_id = request.form.get('chave_pix_id')
     moeda = request.form.get('moeda')
 
-    # Simula geração de QR Code (futuramente conecte com OpenPix)
-    qrcode_url = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=FAKEPIX'
-    payload = f"000201010212FAKEPIX{valor}{chave}{moeda}"
+    chaves_pix = carregar_chaves_pix()
+    chave_pix = next((ch for ch in chaves_pix if ch['id'] == chave_id), None)
 
-    return render_template('qrcode.html', valor=valor, chave=chave, moeda=moeda, payload=payload, qrcode_url=qrcode_url)
+    if not chave_pix:
+        flash("Chave Pix não encontrada.")
+        return redirect(url_for('index'))
+
+    payload = f"000201010212FAKEPIX{valor}{chave_pix['chave']}{moeda}"
+    qrcode_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=FAKEPIX{valor}{chave_pix['chave']}{moeda}"
+
+    return render_template('qrcode.html', valor=valor, chave=chave_pix['chave'], moeda=moeda, payload=payload, qrcode_url=qrcode_url)
 
 @app.route('/chaves')
 def listar_chaves():
+    chaves_pix = carregar_chaves_pix()
+    logger.info(f"Chaves Pix carregadas para a lista: {json.dumps(chaves_pix, indent=4)}")
     return render_template('chaves_pix.html', chaves=chaves_pix)
 
 @app.route('/adicionar', methods=['GET', 'POST'])
 def adicionar_chave_pix_route():
     if request.method == 'POST':
+        descricao = request.form.get('descricao')
+        tipo_chave = request.form.get('tipo_chave')
         chave = request.form.get('chave')
-        if chave:
-            chaves_pix.append(chave)
+        logger.info(f"Dados do formulário: descricao={descricao}, tipo_chave={tipo_chave}, chave={chave}")
+        if not descricao or not tipo_chave or not chave:
+            flash('Todos os campos são obrigatórios!')
+            return redirect(url_for('adicionar_chave_pix_route'))
+        try:
+            adicionar_chave_pix(descricao, tipo_chave, chave)
             flash('Chave adicionada com sucesso!')
+        except Exception as e:
+            flash(f'Erro ao adicionar chave: {str(e)}')
         return redirect(url_for('listar_chaves'))
     return render_template('adicionar_chave_pix.html')
 
-@app.route('/remover/<chave>')
-def remover_chave(chave):
-    if chave in chaves_pix:
-        chaves_pix.remove(chave)
-        flash('Chave removida com sucesso.')
+@app.route('/remover/<chave_id>', methods=['POST'])
+def remover_chave(chave_id):
+    sucesso = remover_chave_pix(chave_id)
+    if sucesso:
+        flash('Chave removida com sucesso!')
+    else:
+        flash('Chave não encontrada.')
     return redirect(url_for('listar_chaves'))
 
 # ROTAS PARA WEBHOOK PIX
@@ -57,18 +80,18 @@ def remover_chave(chave):
 def webhook_pix():
     try:
         payload = request.json
-        print(f"Notificação Pix recebida: {payload}")
+        logger.info(f"Notificação Pix recebida: {payload}")
         log_path = salvar_notificacao(payload)
-        print(f"Notificação salva em: {log_path}")
+        logger.info(f"Notificação salva em: {log_path}")
         resultado = processar_notificacao_pix(payload)
-        return {
+        return jsonify({
             'status': 'success',
             'message': 'Notificação recebida com sucesso',
             'processamento': resultado
-        }, 200
+        }), 200
     except Exception as e:
-        print(f"Erro ao processar webhook: {str(e)}")
-        return {'status': 'error', 'message': str(e)}, 500
+        logger.error(f"Erro ao processar webhook: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/webhook/pix/status', methods=['GET'])
 def webhook_status():
@@ -76,14 +99,38 @@ def webhook_status():
         arquivos = os.listdir(LOGS_DIR)
         arquivos.sort(reverse=True)
         ultimas_notificacoes = arquivos[:10]
-        return {
+        return jsonify({
             'status': 'online',
             'message': 'Serviço de webhook Pix está ativo',
             'ultimas_notificacoes': ultimas_notificacoes,
             'total_notificacoes': len(arquivos)
-        }, 200
+        }), 200
     except Exception as e:
-        return {'status': 'error', 'message': str(e)}, 500
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# ROTAS DE DEPURAÇÃO
+@app.route('/debug/chaves')
+def debug_chaves_route():
+    try:
+        with open('/tmp/chaves_pix.json', 'r', encoding='utf-8') as f:
+            content = f.read()
+        logger.info(f"Conteúdo de /tmp/chaves_pix.json: {content}")
+        return f"Conteúdo de /tmp/chaves_pix.json:<pre>{content}</pre>"
+    except Exception as e:
+        logger.error(f"Erro ao ler /tmp/chaves_pix.json: {str(e)}")
+        return f"Erro ao ler /tmp/chaves_pix.json: {str(e)}"
+
+@app.route('/test_write')
+def test_write_route():
+    test_file = '/tmp/test_write.txt'
+    try:
+        with open(test_file, 'w') as f:
+            f.write('Teste de escrita bem-sucedido')
+        logger.info(f"Arquivo escrito em {test_file}")
+        return f"Arquivo escrito em {test_file}"
+    except Exception as e:
+        logger.error(f"Erro ao escrever em {test_file}: {str(e)}")
+        return f"Erro ao escrever em {test_file}: {str(e)}"
 
 # FUNÇÕES AUXILIARES
 def salvar_notificacao(payload):
@@ -128,66 +175,12 @@ def processar_notificacao_pix(payload):
             return {'status': 'ERROR', 'error': 'Formato de payload desconhecido'}
 
         if pix_info['status'] in ['COMPLETED', 'CONCLUIDA']:
-            print(f"📥 Pagamento confirmado: R${pix_info['valor']} | TXID: {pix_info['txid']}")
-            print(f"👤 Pagador: {pix_info['infoPagador'].get('name') or pix_info['infoPagador'].get('nome')}")
+            logger.info(f"📥 Pagamento confirmado: R${pix_info['valor']} | TXID: {pix_info['txid']}")
+            logger.info(f"👤 Pagador: {pix_info['infoPagador'].get('name') or pix_info['infoPagador'].get('nome')}")
 
         return pix_info
     except Exception as e:
         return {'status': 'ERROR', 'error': str(e)}
-
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-@app.route('/debug/chaves')
-def debug_chaves():
-    try:
-        with open('/tmp/chaves_pix.json', 'r', encoding='utf-8') as f:
-            content = f.read()
-        logger.info(f"Conteúdo de /tmp/chaves_pix.json: {content}")
-        return f"Conteúdo de /tmp/chaves_pix.json:<pre>{content}</pre>"
-    except Exception as e:
-        logger.error(f"Erro ao ler /tmp/chaves_pix.json: {str(e)}")
-        return f"Erro ao ler /tmp/chaves_pix.json: {str(e)}"
-
-@app.route('/test_write')
-def test_write():
-    test_file = '/tmp/test_write.txt'
-    try:
-        with open(test_file, 'w') as f:
-            f.write('Teste de escrita bem-sucedido')
-        logger.info(f"Arquivo escrito em {test_file}")
-        return f"Arquivo escrito em {test_file}"
-    except Exception as e:
-        logger.error(f"Erro ao escrever em {test_file}: {str(e)}")
-        return f"Erro ao escrever em {test_file}: {str(e)}"
-
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-@app.route('/debug/chaves')
-def debug_chaves():
-    try:
-        with open('/tmp/chaves_pix.json', 'r', encoding='utf-8') as f:
-            content = f.read()
-        logger.info(f"Conteúdo de /tmp/chaves_pix.json: {content}")
-        return f"Conteúdo de /tmp/chaves_pix.json:<pre>{content}</pre>"
-    except Exception as e:
-        logger.error(f"Erro ao ler /tmp/chaves_pix.json: {str(e)}")
-        return f"Erro ao ler /tmp/chaves_pix.json: {str(e)}"
-
-@app.route('/test_write')
-def test_write():
-    test_file = '/tmp/test_write.txt'
-    try:
-        with open(test_file, 'w') as f:
-            f.write('Teste de escrita bem-sucedido')
-        logger.info(f"Arquivo escrito em {test_file}")
-        return f"Arquivo escrito em {test_file}"
-    except Exception as e:
-        logger.error(f"Erro ao escrever em {test_file}: {str(e)}")
-        return f"Erro ao escrever em {test_file}: {str(e)}"
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
