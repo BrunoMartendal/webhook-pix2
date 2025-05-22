@@ -1,0 +1,14 @@
+body {
+background-color: #f5f5f5;
+font-family: Arial, sans-serif;
+}
+
+.btn-primary {
+background-color: #33cc95;
+border-color: #33cc95;
+}
+
+.btn-primary:hover {
+background-color: #2ba97d;
+border-color: #2ba97d;
+}
