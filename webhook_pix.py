@@ -4,7 +4,12 @@ import json
 import uuid
 from datetime import datetime
 import logging
-from utils.chaves_pix_manager import carregar_chaves_pix, adicionar_chave_pix, remover_chave_pix
+import requests
+from utils.chaves_pix_manager import carregar_chaves_pix, adicionar_chave_pix, remover_chave_pix, salvar_transacao_pix, atualizar_transacao_pix
+from dotenv import load_dotenv
+
+# Carregar variáveis de ambiente
+load_dotenv()
 
 # Configuração de logging
 logging.basicConfig(level=logging.INFO)
@@ -12,6 +17,14 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = 'segredo_simples'  # Necessário para usar flash()
+
+# Configuração da OpenPix
+OPENPIX_API_KEY = os.getenv('OPENPIX_API_KEY')
+OPENPIX_API_URL = 'https://api.openpix.com.br/openpix/v1'
+OPENPIX_HEADERS = {
+    'Authorization': f'Bearer {OPENPIX_API_KEY}',
+    'Content-Type': 'application/json'
+}
 
 # Logs de notificações Pix
 LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
@@ -37,10 +50,41 @@ def gerar_qrcode():
         flash("Chave Pix não encontrada.")
         return redirect(url_for('index'))
 
-    payload = f"000201010212FAKEPIX{valor}{chave_pix['chave']}{moeda}"
-    qrcode_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=FAKEPIX{valor}{chave_pix['chave']}{moeda}"
+    try:
+        # Validar valor
+        valor_float = float(valor.replace(',', '.'))
+        if valor_float <= 0:
+            flash("O valor deve ser maior que zero.")
+            return redirect(url_for('index'))
 
-    return render_template('qrcode.html', valor=valor, chave=chave_pix['chave'], moeda=moeda, payload=payload, qrcode_url=qrcode_url)
+        # Criar cobrança Pix na OpenPix
+        payload = {
+            'value': int(valor_float * 100),  # OpenPix usa centavos
+            'correlationID': str(uuid.uuid4()),
+            'destination': {
+                'pixKey': chave_pix['chave'],
+                'type': chave_pix['tipo_chave']
+            },
+            'comment': f"Pagamento de R${valor_float:.2f} para {chave_pix['descricao']}"
+        }
+        response = requests.post(f'{OPENPIX_API_URL}/charge', headers=OPENPIX_HEADERS, json=payload)
+        response.raise_for_status()
+        charge = response.json()
+
+        # Salvar transação
+        transacao = salvar_transacao_pix(valor_float, moeda, chave_id, charge['charge']['correlationID'])
+
+        return render_template('qrcode.html',
+                             valor=valor_float,
+                             chave=chave_pix['chave'],
+                             moeda=moeda,
+                             txid=charge['charge']['correlationID'],
+                             payload=charge['charge']['brCode'],
+                             qrcode_url=charge['charge']['qrCodeImage'])
+    except Exception as e:
+        logger.error(f"Erro ao gerar QR Code: {str(e)}")
+        flash(f"Erro ao gerar QR Code: {str(e)}")
+        return redirect(url_for('index'))
 
 @app.route('/chaves')
 def listar_chaves():
@@ -56,7 +100,7 @@ def adicionar_chave_pix_route():
         chave = request.form.get('chave')
         logger.info(f"Dados do formulário: descricao={descricao}, tipo_chave={tipo_chave}, chave={chave}")
         if not descricao or not tipo_chave or not chave:
-            flash('Todos os campos são obrigatórios!')
+            flash('Todos os campos obrigatórios devem ser preenchidos!')
             return redirect(url_for('adicionar_chave_pix_route'))
         try:
             adicionar_chave_pix(descricao, tipo_chave, chave)
@@ -80,7 +124,7 @@ def remover_chave(chave_id):
 def webhook_pix():
     try:
         payload = request.json
-        logger.info(f"Notificação Pix recebida: {payload}")
+        logger.info(f"Notificação Pix recebida: {json.dumps(payload, indent=4)}")
         log_path = salvar_notificacao(payload)
         logger.info(f"Notificação salva em: {log_path}")
         resultado = processar_notificacao_pix(payload)
@@ -119,6 +163,17 @@ def debug_chaves_route():
     except Exception as e:
         logger.error(f"Erro ao ler /tmp/chaves_pix.json: {str(e)}")
         return f"Erro ao ler /tmp/chaves_pix.json: {str(e)}"
+
+@app.route('/debug/transacoes')
+def debug_transacoes_route():
+    try:
+        with open('/tmp/transacoes_pix.json', 'r', encoding='utf-8') as f:
+            content = f.read()
+        logger.info(f"Conteúdo de /tmp/transacoes_pix.json: {content}")
+        return f"Conteúdo de /tmp/transacoes_pix.json:<pre>{content}</pre>"
+    except Exception as e:
+        logger.error(f"Erro ao ler /tmp/transacoes_pix.json: {str(e)}")
+        return f"Erro ao ler /tmp/transacoes_pix.json: {str(e)}"
 
 @app.route('/test_write')
 def test_write_route():
@@ -160,22 +215,38 @@ def processar_notificacao_pix(payload):
                 'infoPagador': pix.get('infoPagador', {}),
                 'type': pix.get('type', payload.get('type'))
             })
+            # Atualizar transação, se aplicável
+            if pix_info['status'] in ['COMPLETED', 'CONCLUIDA']:
+                transacao = atualizar_transacao_pix(pix_info['txid'], 'CONCLUIDA')
+                if transacao:
+                    pix_info['proximo_passo'] = f"Pagamento confirmado, aguardando conversão para {transacao['moeda']}"
+                else:
+                    pix_info['proximo_passo'] = 'Transação não encontrada'
+
         elif payload.get('event') == 'OPENPIX:TRANSACTION_RECEIVED':
             charge = payload.get('charge', {})
             pm_pix = charge.get('paymentMethods', {}).get('pix', charge.get('customer', {}))
             pix_info.update({
                 'status': charge.get('status') or pm_pix.get('status'),
-                'valor': charge.get('value') or pm_pix.get('value'),
-                'txid': charge.get('transactionID') or pm_pix.get('transactionID'),
+                'valor': (charge.get('value') or pm_pix.get('value', 0)) / 100,  # OpenPix usa centavos
+                'txid': charge.get('transactionID') or pm_pix.get('transactionID') or charge.get('correlationID'),
                 'e2eid': charge.get('identifier') or pm_pix.get('identifier'),
                 'infoPagador': charge.get('customer') or pm_pix.get('payer', {}),
                 'type': charge.get('type')
             })
+            # Atualizar transação, se aplicável
+            if pix_info['status'] in ['COMPLETED', 'CONCLUIDA']:
+                transacao = atualizar_transacao_pix(pix_info['txid'], 'CONCLUIDA')
+                if transacao:
+                    pix_info['proximo_passo'] = f"Pagamento confirmado, aguardando conversão para {transacao['moeda']}"
+                else:
+                    pix_info['proximo_passo'] = 'Transação não encontrada'
+
         else:
             return {'status': 'ERROR', 'error': 'Formato de payload desconhecido'}
 
         if pix_info['status'] in ['COMPLETED', 'CONCLUIDA']:
-            logger.info(f"📥 Pagamento confirmado: R${pix_info['valor']} | TXID: {pix_info['txid']}")
+            logger.info(f"📥 Pagamento confirmado: R${pix_info['valor']:.2f} | TxID: {pix_info['txid']}")
             logger.info(f"👤 Pagador: {pix_info['infoPagador'].get('name') or pix_info['infoPagador'].get('nome')}")
 
         return pix_info
