@@ -3,6 +3,7 @@ import os
 import json
 import uuid
 from datetime import datetime
+from utils.chaves_pix_manager import carregar_chaves_pix, adicionar_chave_pix, remover_chave_pix
 
 app = Flask(__name__)
 app.secret_key = 'chave_super_secreta'
@@ -11,27 +12,10 @@ app.secret_key = 'chave_super_secreta'
 LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
 os.makedirs(LOGS_DIR, exist_ok=True)
 
-# Lista de chaves Pix (simulado - depois pode ser banco de dados)
-chaves_pix = [
-    {
-        'id': str(uuid.uuid4()),
-        'descricao': 'Principal',
-        'tipo_chave': 'E-mail',
-        'chave': 'exemplo@pix.com',
-        'data_cadastro': datetime.now().strftime('%d/%m/%Y %H:%M')
-    },
-    {
-        'id': str(uuid.uuid4()),
-        'descricao': 'Conta PJ',
-        'tipo_chave': 'Telefone',
-        'chave': '+55 47 99622-9999',
-        'data_cadastro': datetime.now().strftime('%d/%m/%Y %H:%M')
-    }
-]
-
 @app.route('/')
 def index():
-    return render_template('index.html', chaves=chaves_pix)
+    chaves = carregar_chaves_pix()
+    return render_template('index.html', chaves=chaves)
 
 @app.route('/gerar_qrcode', methods=['POST'])
 def gerar_qrcode():
@@ -44,6 +28,7 @@ def gerar_qrcode():
 
 @app.route('/chaves')
 def listar_chaves_pix():
+    chaves_pix = carregar_chaves_pix()
     return render_template('chaves_pix.html', chaves_pix=chaves_pix)
 
 @app.route('/adicionar', methods=['GET', 'POST'])
@@ -57,15 +42,7 @@ def adicionar_chave_pix_route():
             flash('Todos os campos são obrigatórios!')
             return redirect(url_for('adicionar_chave_pix_route'))
 
-        nova_entrada = {
-            'id': str(uuid.uuid4()),
-            'descricao': descricao,
-            'tipo_chave': tipo_chave,
-            'chave': chave,
-            'data_cadastro': datetime.now().strftime('%d/%m/%Y %H:%M')
-        }
-
-        chaves_pix.append(nova_entrada)
+        adicionar_chave_pix(descricao, tipo_chave, chave)
         flash('Chave adicionada com sucesso!')
         return redirect(url_for('listar_chaves_pix'))
 
@@ -73,9 +50,10 @@ def adicionar_chave_pix_route():
 
 @app.route('/remover/<chave_id>', methods=['POST'])
 def remover_chave_pix_route(chave_id):
-    global chaves_pix
-    chaves_pix = [ch for ch in chaves_pix if ch['id'] != chave_id]
-    flash('Chave removida com sucesso.')
+    if remover_chave_pix(chave_id):
+        flash('Chave removida com sucesso.')
+    else:
+        flash('Erro ao remover chave. Tente novamente.')
     return redirect(url_for('listar_chaves_pix'))
 
 @app.route('/webhook/pix', methods=['POST'])
@@ -97,12 +75,28 @@ def webhook_status():
         arquivos = os.listdir(LOGS_DIR)
         arquivos.sort(reverse=True)
         ultimas_notificacoes = arquivos[:10]
-        return jsonify({
-            'status': 'online',
-            'message': 'Serviço de webhook Pix está ativo',
-            'ultimas_notificacoes': ultimas_notificacoes,
-            'total_notificacoes': len(arquivos)
-        }), 200
+        
+        # Carregar conteúdo das últimas notificações
+        notificacoes_detalhes = []
+        for arquivo in ultimas_notificacoes:
+            try:
+                with open(os.path.join(LOGS_DIR, arquivo), 'r') as f:
+                    conteudo = json.load(f)
+                    notificacoes_detalhes.append({
+                        'arquivo': arquivo,
+                        'conteudo': conteudo
+                    })
+            except Exception as e:
+                notificacoes_detalhes.append({
+                    'arquivo': arquivo,
+                    'erro': str(e)
+                })
+        
+        return render_template('webhook_status.html', 
+                              status='online',
+                              message='Serviço de webhook Pix está ativo',
+                              notificacoes=notificacoes_detalhes,
+                              total_notificacoes=len(arquivos))
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
