@@ -5,28 +5,29 @@ import uuid
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = 'chave_super_secreta'  # Necessária para usar flash()
+app.secret_key = 'chave_super_secreta'
 
 # Diretório para armazenar logs de notificações
 LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
 os.makedirs(LOGS_DIR, exist_ok=True)
 
-# Lista de chaves Pix (simulado - depois pode ir para banco de dados)
+# Lista de chaves Pix (simulado - depois pode ser banco de dados)
 chaves_pix = [
     {
+        'id': str(uuid.uuid4()),
         'descricao': 'Principal',
         'tipo_chave': 'E-mail',
-        'chave': 'exemplo@pix.com'
+        'chave': 'exemplo@pix.com',
+        'data_cadastro': datetime.now().strftime('%d/%m/%Y %H:%M')
     },
     {
+        'id': str(uuid.uuid4()),
         'descricao': 'Conta PJ',
         'tipo_chave': 'Telefone',
-        'chave': '+55 47 99622-9999'
+        'chave': '+55 47 99622-9999',
+        'data_cadastro': datetime.now().strftime('%d/%m/%Y %H:%M')
     }
 ]
-
-
-# -------------------- ROTAS DE FRONT-END --------------------
 
 @app.route('/')
 def index():
@@ -37,16 +38,13 @@ def gerar_qrcode():
     valor = request.form.get('valor')
     chave = request.form.get('chave')
     moeda = request.form.get('moeda')
-
-    # Aqui você pode integrar com a OpenPix futuramente
     payload = f"000201010212FAKEPIX{valor}{chave}{moeda}"
     qrcode_url = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + payload
-
     return render_template("qrcode.html", valor=valor, chave=chave, moeda=moeda, payload=payload, qrcode_url=qrcode_url)
 
 @app.route('/chaves')
-def listar_chaves():
-    return render_template('chaves_pix.html', chaves=chaves_pix)
+def listar_chaves_pix():
+    return render_template('chaves_pix.html', chaves_pix=chaves_pix)
 
 @app.route('/adicionar', methods=['GET', 'POST'])
 def adicionar_chave_pix_route():
@@ -59,29 +57,26 @@ def adicionar_chave_pix_route():
             flash('Todos os campos são obrigatórios!')
             return redirect(url_for('adicionar_chave_pix_route'))
 
-        # Aqui você pode salvar num banco de dados ou lista
         nova_entrada = {
+            'id': str(uuid.uuid4()),
             'descricao': descricao,
             'tipo_chave': tipo_chave,
-            'chave': chave
+            'chave': chave,
+            'data_cadastro': datetime.now().strftime('%d/%m/%Y %H:%M')
         }
 
-        # exemplo: adicionando em uma lista global
         chaves_pix.append(nova_entrada)
-
         flash('Chave adicionada com sucesso!')
         return redirect(url_for('listar_chaves_pix'))
 
     return render_template('adicionar_chave_pix.html')
 
-@app.route('/remover/<chave>')
-def remover_chave(chave):
-    if chave in chaves_pix:
-        chaves_pix.remove(chave)
-        flash('Chave removida com sucesso.')
-    return redirect(url_for('listar_chaves'))
-
-# -------------------- ROTAS DO WEBHOOK PIX --------------------
+@app.route('/remover/<chave_id>', methods=['POST'])
+def remover_chave_pix_route(chave_id):
+    global chaves_pix
+    chaves_pix = [ch for ch in chaves_pix if ch['id'] != chave_id]
+    flash('Chave removida com sucesso.')
+    return redirect(url_for('listar_chaves_pix'))
 
 @app.route('/webhook/pix', methods=['POST'])
 def webhook_pix():
@@ -91,11 +86,7 @@ def webhook_pix():
         log_path = salvar_notificacao(payload)
         print(f"Notificação salva em: {log_path}")
         resultado = processar_notificacao_pix(payload)
-        return jsonify({
-            'status': 'success',
-            'message': 'Notificação recebida com sucesso',
-            'processamento': resultado
-        }), 200
+        return jsonify({'status': 'success', 'message': 'Notificação recebida com sucesso', 'processamento': resultado}), 200
     except Exception as e:
         print(f"Erro ao processar webhook: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
@@ -114,8 +105,6 @@ def webhook_status():
         }), 200
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
-
-# -------------------- FUNÇÕES AUXILIARES --------------------
 
 def salvar_notificacao(payload):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -168,8 +157,6 @@ def processar_notificacao_pix(payload):
 
     except Exception as e:
         return {'status': 'ERROR', 'error': str(e)}
-
-# -------------------- EXECUÇÃO --------------------
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
