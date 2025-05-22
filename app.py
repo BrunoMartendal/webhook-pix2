@@ -3,31 +3,45 @@ import os
 import json
 import uuid
 from datetime import datetime
-from utils.chaves_pix_manager import carregar_chaves_pix, adicionar_chave_pix, remover_chave_pix
+
+# Importa as funções de utilitário
+from utils.gerenciador_chaves import (
+    carregar_chaves_pix,
+    adicionar_chave_pix,
+    remover_chave_pix,
+    salvar_chaves_pix
+)
 
 app = Flask(__name__)
 app.secret_key = 'chave_super_secreta'
 
-# Diretório para armazenar logs de notificações
-LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
-os.makedirs(LOGS_DIR, exist_ok=True)
+# -------------------- ROTAS DE FRONT-END --------------------
 
 @app.route('/')
 def index():
-    chaves = carregar_chaves_pix()
-    return render_template('index.html', chaves=chaves)
+    chaves_pix = carregar_chaves_pix()
+    return render_template('index.html', chaves_pix=chaves_pix)
 
 @app.route('/gerar_qrcode', methods=['POST'])
 def gerar_qrcode():
     valor = request.form.get('valor')
-    chave = request.form.get('chave')
+    chave_pix_id = request.form.get('chave_pix_id')
     moeda = request.form.get('moeda')
-    payload = f"000201010212FAKEPIX{valor}{chave}{moeda}"
-    qrcode_url = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + payload
-    return render_template("qrcode.html", valor=valor, chave=chave, moeda=moeda, payload=payload, qrcode_url=qrcode_url)
+
+    chaves_pix = carregar_chaves_pix()
+    chave_pix = next((ch for ch in chaves_pix if ch['id'] == chave_pix_id), None)
+
+    if not chave_pix:
+        flash("Chave Pix não encontrada.")
+        return redirect(url_for('index'))
+
+    payload = f"000201010212FAKEPIX{valor}{chave_pix['chave']}{moeda}"
+    qrcode_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={payload}"
+
+    return render_template("qrcode.html", valor=valor, chave=chave_pix['chave'], moeda=moeda, payload=payload, qrcode_url=qrcode_url)
 
 @app.route('/chaves')
-def listar_chaves_pix():
+def listar_chaves():
     chaves_pix = carregar_chaves_pix()
     return render_template('chaves_pix.html', chaves_pix=chaves_pix)
 
@@ -44,17 +58,23 @@ def adicionar_chave_pix_route():
 
         adicionar_chave_pix(descricao, tipo_chave, chave)
         flash('Chave adicionada com sucesso!')
-        return redirect(url_for('listar_chaves_pix'))
+        return redirect(url_for('listar_chaves'))
 
     return render_template('adicionar_chave_pix.html')
 
 @app.route('/remover/<chave_id>', methods=['POST'])
-def remover_chave_pix_route(chave_id):
-    if remover_chave_pix(chave_id):
-        flash('Chave removida com sucesso.')
+def remover_chave(chave_id):
+    sucesso = remover_chave_pix(chave_id)
+    if sucesso:
+        flash('Chave removida com sucesso!')
     else:
-        flash('Erro ao remover chave. Tente novamente.')
-    return redirect(url_for('listar_chaves_pix'))
+        flash('Chave não encontrada.')
+    return redirect(url_for('listar_chaves'))
+
+# -------------------- WEBHOOK PIX --------------------
+
+LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+os.makedirs(LOGS_DIR, exist_ok=True)
 
 @app.route('/webhook/pix', methods=['POST'])
 def webhook_pix():
@@ -64,7 +84,11 @@ def webhook_pix():
         log_path = salvar_notificacao(payload)
         print(f"Notificação salva em: {log_path}")
         resultado = processar_notificacao_pix(payload)
-        return jsonify({'status': 'success', 'message': 'Notificação recebida com sucesso', 'processamento': resultado}), 200
+        return jsonify({
+            'status': 'success',
+            'message': 'Notificação recebida com sucesso',
+            'processamento': resultado
+        }), 200
     except Exception as e:
         print(f"Erro ao processar webhook: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
@@ -75,30 +99,16 @@ def webhook_status():
         arquivos = os.listdir(LOGS_DIR)
         arquivos.sort(reverse=True)
         ultimas_notificacoes = arquivos[:10]
-        
-        # Carregar conteúdo das últimas notificações
-        notificacoes_detalhes = []
-        for arquivo in ultimas_notificacoes:
-            try:
-                with open(os.path.join(LOGS_DIR, arquivo), 'r') as f:
-                    conteudo = json.load(f)
-                    notificacoes_detalhes.append({
-                        'arquivo': arquivo,
-                        'conteudo': conteudo
-                    })
-            except Exception as e:
-                notificacoes_detalhes.append({
-                    'arquivo': arquivo,
-                    'erro': str(e)
-                })
-        
-        return render_template('webhook_status.html', 
-                              status='online',
-                              message='Serviço de webhook Pix está ativo',
-                              notificacoes=notificacoes_detalhes,
-                              total_notificacoes=len(arquivos))
+        return jsonify({
+            'status': 'online',
+            'message': 'Serviço de webhook Pix está ativo',
+            'ultimas_notificacoes': ultimas_notificacoes,
+            'total_notificacoes': len(arquivos)
+        }), 200
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# -------------------- FUNÇÕES AUXILIARES --------------------
 
 def salvar_notificacao(payload):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -151,6 +161,8 @@ def processar_notificacao_pix(payload):
 
     except Exception as e:
         return {'status': 'ERROR', 'error': str(e)}
+
+# -------------------- EXECUÇÃO LOCAL --------------------
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
