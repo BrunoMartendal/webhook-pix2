@@ -6,14 +6,18 @@ from datetime import datetime
 
 # Importa as funções de utilitário
 from utils.chaves_pix_manager import (
-carregar_chaves_pix,
-adicionar_chave_pix,
-remover_chave_pix,
-salvar_chaves_pix
+    carregar_chaves_pix,
+    adicionar_chave_pix,
+    remover_chave_pix,
+    salvar_chaves_pix
 )
 
 app = Flask(__name__)
 app.secret_key = 'chave_super_secreta'
+
+# Diretório para logs
+LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+os.makedirs(LOGS_DIR, exist_ok=True)
 
 # -------------------- ROTAS DE FRONT-END --------------------
 
@@ -72,9 +76,6 @@ def remover_chave(chave_id):
     return redirect(url_for('listar_chaves'))
 
 # -------------------- WEBHOOK PIX --------------------
-
-LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
-os.makedirs(LOGS_DIR, exist_ok=True)
 
 @app.route('/webhook/pix', methods=['POST'])
 def webhook_pix():
@@ -162,7 +163,7 @@ def processar_notificacao_pix(payload):
     except Exception as e:
         return {'status': 'ERROR', 'error': str(e)}
 
-# -------------------- EXECUÇÃO LOCAL --------------------
+# -------------------- EXECUÇÃO --------------------
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
